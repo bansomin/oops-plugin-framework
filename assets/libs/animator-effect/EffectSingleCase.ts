@@ -4,8 +4,9 @@
  * @LastEditors: dgflash
  * @LastEditTime: 2023-03-06 14:40:34
  */
-import { Animation, Component, Node, NodePool, ParticleSystem, Prefab, Vec3, sp } from 'cc';
-import { oops } from '../../core/Oops';
+import { Animation, Component, Node, NodePool, ParticleSystem, Prefab, sp, Vec3 } from 'cc';
+import { message } from '../../core/common/event/MessageManager';
+import { resLoader } from '../../core/common/loader/ResLoader';
 import { ViewUtil } from '../../core/utils/ViewUtil';
 import { EffectEvent } from './EffectEvent';
 import { EffectFinishedRelease } from './EffectFinishedRelease';
@@ -17,11 +18,13 @@ class EffectData extends Component {
 }
 
 /** 特效参数 */
-interface IEffectParams {
+export interface IEffectParams {
     /** 初始位置 */
     pos?: Vec3,
     /** 是否播放完成后删除 */
-    isPlayFinishedRelease?: boolean
+    isPlayFinishedRelease?: boolean,
+    /** 资源包名 */
+    bundleName?: string
 }
 
 /** 
@@ -56,43 +59,52 @@ export class EffectSingleCase {
     /** 正在使用中的显示对象集合 */
     private effects_use: Map<Node, boolean> = new Map();
     /** 对象池中用到的资源 - 这里只管理本对象加载的资源，预加载资源由其它对象自己施放 */
-    private res: Map<string, boolean> = new Map();
+    private res: Map<string, string> = new Map();
 
     constructor() {
-        oops.message.on(EffectEvent.Put, this.onHandler, this);
+        message.on(EffectEvent.Put, this.onPut, this);
     }
 
-    private onHandler(event: string, args: any) {
-        if (event == EffectEvent.Put) {
-            this.put(args as Node);
+    private onPut(event: string, node: Node) {
+        this.put(node);
+    }
+
+    /**
+     * 获取指定资源池中对象数量
+     * @param path  预制资源路径
+     */
+    getCount(path: string): number {
+        var np = this.effects.get(path);
+        if (np) {
+            return np.size();
         }
+        return 0;
     }
 
     /** 
-     * 加载资源并现实特效 
+     * 加载资源并生成节点对象
      * @param path    预制资源路径
      * @param parent  父节点
      * @param pos     位置
      */
-    loadAndShow(path: string, parent?: Node, params?: IEffectParams): Promise<Node> {
+    async loadAndShow(path: string, parent?: Node, params?: IEffectParams): Promise<Node> {
         return new Promise(async (resolve, reject) => {
             var np = this.effects.get(path);
             if (np == undefined) {
-                // 记录显示对象资源
-                this.res.set(path, true);
+                if (params && params.bundleName) {
+                    this.res.set(path, params.bundleName);
+                    await resLoader.loadAsync(params.bundleName, path, Prefab);
+                }
+                else {
+                    this.res.set(path, resLoader.defaultBundleName);
+                    await resLoader.loadAsync(path, Prefab);
+                }
 
-                oops.res.load(path, Prefab, (err: Error | null, prefab: Prefab) => {
-                    if (err) {
-                        console.error(`名为【${path}】的特效资源加载失败`);
-                        return;
-                    }
-
-                    var node = this.show(path, parent, params);
-                    resolve(node);
-                });
+                const node = this.show(path, parent, params);
+                resolve(node);
             }
             else {
-                var node = this.show(path, parent, params);
+                const node = this.show(path, parent, params);
                 resolve(node);
             }
         });
@@ -104,7 +116,7 @@ export class EffectSingleCase {
      * @param parent  父节点
      * @param pos     位置
      */
-    show(path: string, parent?: Node, params?: IEffectParams): Node {
+    private show(path: string, parent?: Node, params?: IEffectParams): Node {
         var np = this.effects.get(path);
         if (np == null) {
             np = new NodePool();
@@ -176,19 +188,25 @@ export class EffectSingleCase {
     }
 
     /**
-     * 施放对象池中显示对象的资源内存
+     * 释放对象池中显示对象的资源内存
      * @param path 资源路径 
      */
     release(path?: string) {
         if (path) {
             this.clear(path);
-            oops.res.release(path);
+            const bundleName = this.res.get(path);
+            resLoader.release(path, bundleName);
+            this.res.delete(path);
         }
         else {
+            // 施放池中对象内存
             this.clear();
-            this.res.forEach((value: boolean, path: string) => {
-                oops.res.release(path);
+
+            // 施放对象资源内存
+            this.res.forEach((bundleName: string, path: string) => {
+                resLoader.release(path, bundleName);
             });
+            this.res.clear()
         }
     }
 
@@ -201,7 +219,7 @@ export class EffectSingleCase {
         }
         else {
             // COCOS动画
-            let anims: Animation[] = node.getComponentsInChildren(Animation);
+            var anims: Animation[] = node.getComponentsInChildren(Animation);
             if (anims.length > 0) {
                 anims.forEach(animator => {
                     let aniName = animator.defaultClip?.name;
@@ -215,7 +233,7 @@ export class EffectSingleCase {
             }
             // 粒子动画
             else if (ParticleSystem) {
-                let particles: ParticleSystem[] = node.getComponentsInChildren(ParticleSystem);
+                var particles: ParticleSystem[] = node.getComponentsInChildren(ParticleSystem);
                 particles.forEach(particle => {
                     particle.simulationSpeed = this.speed;
                 });

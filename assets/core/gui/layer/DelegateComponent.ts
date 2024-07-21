@@ -15,8 +15,8 @@ const { ccclass } = _decorator;
 export class DelegateComponent extends Component {
     /** 视图参数 */
     vp: ViewParams = null!;
-    /** 界面关闭回调 - 包括关闭动画播放完 */
-    onHide: Function = null!;
+    /** 界面关闭回调 - 包括关闭动画播放完（辅助框架内存业务流程使用） */
+    onCloseWindow: Function = null!;
 
     /** 窗口添加 */
     add() {
@@ -37,9 +37,7 @@ export class DelegateComponent extends Component {
             if (typeof this.vp.callbacks.onBeforeRemove === "function") {
                 this.vp.callbacks.onBeforeRemove(
                     this.node,
-                    () => {
-                        this.removed(this.vp, isDestroy);
-                    });
+                    this.onBeforeRemoveNext.bind(this, isDestroy));
             }
             else {
                 this.removed(this.vp, isDestroy);
@@ -47,16 +45,21 @@ export class DelegateComponent extends Component {
         }
     }
 
+    /** 窗口关闭前动画处理完后的回调方法，主要用于释放资源 */
+    private onBeforeRemoveNext(isDestroy?: boolean) {
+        this.removed(this.vp, isDestroy);
+    }
+
     /** 窗口组件中触发移除事件与释放窗口对象 */
     private removed(vp: ViewParams, isDestroy?: boolean) {
         vp.valid = false;
 
-        if (typeof vp.callbacks.onRemoved === "function") {
-            vp.callbacks!.onRemoved(this.node, vp.params);
+        if (vp.callbacks && typeof vp.callbacks.onRemoved === "function") {
+            vp.callbacks.onRemoved(this.node, vp.params);
         }
 
         // 界面移除舞台事件
-        this.onHide && this.onHide(vp);
+        this.onCloseWindow && this.onCloseWindow(vp);
 
         if (isDestroy) {
             // 释放界面显示对象

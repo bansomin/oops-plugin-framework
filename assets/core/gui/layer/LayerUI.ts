@@ -1,4 +1,4 @@
-import { error, instantiate, Node, Prefab, warn, Widget } from "cc";
+import { instantiate, Node, Prefab, Widget } from "cc";
 import { oops } from "../../Oops";
 import { UICallbacks, ViewParams } from "./Defines";
 import { DelegateComponent } from "./DelegateComponent";
@@ -35,7 +35,7 @@ export class LayerUI extends Node {
      */
     add(config: UIConfig, params?: any, callbacks?: UICallbacks) {
         if (this.ui_nodes.has(config.prefab)) {
-            warn(`路径为【${config.prefab}】的预制重复加载`);
+            console.warn(`路径为【${config.prefab}】的预制重复加载`);
             return;
         }
 
@@ -69,7 +69,8 @@ export class LayerUI extends Node {
             oops.res.load(bundle, vp.config.prefab, (err: Error | null, res: Prefab) => {
                 if (err) {
                     this.ui_nodes.delete(vp.config.prefab);
-                    error(`路径为【${vp.config.prefab}】的预制加载失败`);
+                    console.warn(`路径为【${vp.config.prefab}】的预制加载失败`);
+                    vp.callbacks && vp.callbacks.onLoadFailure && vp.callbacks.onLoadFailure();
                     return;
                 }
 
@@ -78,14 +79,14 @@ export class LayerUI extends Node {
 
                 let comp = childNode.addComponent(DelegateComponent);
                 comp.vp = vp;
-                comp.onHide = this.onHide.bind(this);
+                comp.onCloseWindow = this.onCloseWindow.bind(this);
 
                 this.showUi(vp);
             });
         }
     }
 
-    protected onHide(vp: ViewParams) {
+    protected onCloseWindow(vp: ViewParams) {
         this.ui_nodes.delete(vp.config.prefab);
     }
 
@@ -115,13 +116,18 @@ export class LayerUI extends Node {
         // 界面移出舞台
         var vp = this.ui_nodes.get(prefabPath);
         if (vp) {
-            // 优先使用参数中控制的释放条件，如果未传递参数则用配置中的释放条件
-            if (release === undefined && vp.config.destroy !== undefined) {
-                release = vp.config.destroy;
-            }
-            // 默认不缓存关闭的界面
-            else {
-                release = true;
+            // // 优先使用参数中控制的释放条件，如果未传递参数则用配置中的释放条件
+            // if (release === undefined && vp.config.destroy !== undefined) {
+            //     release = vp.config.destroy;
+            // }
+            // // 默认不缓存关闭的界面
+            // else {
+            //     release = true;
+            // }
+
+            // 优先使用参数中控制的释放条件，如果未传递参数则用配置中的释放条件，默认不缓存关闭的界面
+            if (release === undefined) {
+                release = vp.config.destroy !== undefined ? vp.config.destroy : true;
             }
 
             // 不释放界面，缓存起来待下次使用

@@ -17,7 +17,7 @@ export class ModuleUtil {
      */
     public static addViewUi<T extends CCVMParentComp | CCComp>(
         ent: ecs.Entity,
-        ctor: __private._types_globals__Constructor<T> | __private._types_globals__AbstractedConstructor<T>,
+        ctor: __private.__types_globals__Constructor<T> | __private.__types_globals__AbstractedConstructor<T>,
         uiId: number,
         uiArgs: any = null) {
         var uic: UICallbacks = {
@@ -39,7 +39,7 @@ export class ModuleUtil {
      */
     public static addViewUiAsync<T extends CCVMParentComp | CCComp>(
         ent: ecs.Entity,
-        ctor: __private._types_globals__Constructor<T> | __private._types_globals__AbstractedConstructor<T>,
+        ctor: __private.__types_globals__Constructor<T> | __private.__types_globals__AbstractedConstructor<T>,
         uiId: number,
         uiArgs: any = null): Promise<Node | null> {
         return new Promise<Node | null>((resolve, reject) => {
@@ -48,6 +48,9 @@ export class ModuleUtil {
                     var comp = node.getComponent(ctor) as ecs.Comp;
                     ent.add(comp);
                     resolve(node);
+                },
+                onLoadFailure: () => {
+                    resolve(null);
                 }
             };
             oops.gui.open(uiId, uiArgs, uic);
@@ -59,10 +62,10 @@ export class ModuleUtil {
      * @param ent        模块实体
      * @param ctor       界面逻辑组件
      * @param uiId       界面资源编号
-     * @param isDestroy  是否释放界面缓存
+     * @param isDestroy  是否释放界面缓存（默认为释放界面缓存）
      */
-    public static removeViewUi(ent: ecs.Entity, ctor: CompType<ecs.IComp>, uiId: number, isDestroy?: boolean) {
-        ent.remove(ctor);
+    public static removeViewUi(ent: ecs.Entity, ctor: CompType<ecs.IComp>, uiId: number, isDestroy: boolean = true) {
+        ent.remove(ctor, isDestroy);
         oops.gui.remove(uiId, isDestroy);
     }
 
@@ -75,7 +78,7 @@ export class ModuleUtil {
     */
     public static addView<T extends CCVMParentComp | CCComp>(
         ent: ecs.Entity,
-        ctor: __private._types_globals__Constructor<T> | __private._types_globals__AbstractedConstructor<T>,
+        ctor: __private.__types_globals__Constructor<T> | __private.__types_globals__AbstractedConstructor<T>,
         parent: Node,
         url: string) {
         var node = ViewUtil.createPrefabNode(url);

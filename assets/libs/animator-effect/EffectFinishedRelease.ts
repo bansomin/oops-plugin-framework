@@ -6,8 +6,8 @@
  */
 
 import { Animation, Component, ParticleSystem, _decorator, sp } from 'cc';
-import { oops } from '../../core/Oops';
 import { EffectEvent } from './EffectEvent';
+import { message } from '../../core/common/event/MessageManager';
 
 const { ccclass, property } = _decorator;
 
@@ -22,7 +22,7 @@ export class EffectFinishedRelease extends Component {
         let spine = this.getComponent(sp.Skeleton);
         if (spine) {
             // 播放第一个动画
-            let json = (spine.skeletonData.skeletonJson as any).animations;
+            let json = (spine.skeletonData!.skeletonJson! as any).animations;
             for (var name in json) {
                 spine.setCompleteListener(this.onRecovery.bind(this));
                 spine.setAnimation(0, name, false);
@@ -63,6 +63,6 @@ export class EffectFinishedRelease extends Component {
     }
 
     private onRecovery() {
-        if (this.node.parent) oops.message.dispatchEvent(EffectEvent.Put, this.node);
+        if (this.node.parent) message.dispatchEvent(EffectEvent.Put, this.node);
     }
 }

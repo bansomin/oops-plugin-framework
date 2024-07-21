@@ -1,4 +1,4 @@
-import { Component } from "cc";
+import { AudioClip, Component } from "cc";
 import { oops } from "../../Oops";
 import { AudioEffect } from "./AudioEffect";
 import { AudioMusic } from "./AudioMusic";
@@ -12,13 +12,20 @@ const LOCAL_STORE_KEY = "game_audio";
 oops.audio.playMusic("audios/nocturne");
  */
 export class AudioManager extends Component {
+    /** 背景音乐管理对象 */
     music: AudioMusic = null!;
+    /** 音效管理对象 */
     effect: AudioEffect = null!;
 
+    /** 音乐管理状态数据 */
     private local_data: any = {};
+    /** 背景音乐音量值 */
     private _volume_music: number = 1;
+    /** 音效音量值 */
     private _volume_effect: number = 1;
+    /** 背景音乐播放开关 */
     private _switch_music: boolean = true;
+    /** 音效果播放开关 */
     private _switch_effect: boolean = true;
 
     /**
@@ -34,18 +41,18 @@ export class AudioManager extends Component {
      * @param url        资源地址
      * @param callback   音乐播放完成事件
      */
-    playMusic(url: string, callback?: Function) {
-        if (this._switch_music && !this.music.playing) {
+    playMusic(url: string, callback?: Function, bundleName?: string) {
+        if (this._switch_music) {
             this.music.loop = false;
-            this.music.load(url, callback);
+            this.music.load(url, callback, bundleName);
         }
     }
 
     /** 循环播放背景音乐 */
-    playMusicLoop(url: string) {
-        if (this._switch_music && !this.music.playing) {
+    playMusicLoop(url: string, bundleName?: string) {
+        if (this._switch_music) {
             this.music.loop = true;
-            this.music.load(url);
+            this.music.load(url, null!, bundleName);
         }
     }
 
@@ -106,10 +113,15 @@ export class AudioManager extends Component {
      * 播放音效
      * @param url        资源地址
      */
-    playEffect(url: string) {
+    playEffect(url: string | AudioClip, callback?: Function, bundleName?: string) {
         if (this._switch_effect) {
-            this.effect.load(url);
+            this.effect.load(url, callback, bundleName);
         }
+    }
+
+    /** 释放音效资源 */
+    releaseEffect(url: string | AudioClip, bundleName?: string) {
+        this.effect.release(url, bundleName);
     }
 
     /** 

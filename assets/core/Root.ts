@@ -5,12 +5,14 @@
  * @LastEditTime: 2023-08-28 10:02:57
  */
 import { Component, Game, JsonAsset, Node, _decorator, director, game, screen, sys } from "cc";
-import { LanguageManager } from "../libs/gui/language/Language";
 import { GameConfig } from "../module/config/GameConfig";
 import { GameQueryConfig } from "../module/config/GameQueryConfig";
 import { oops, version } from "./Oops";
 import { AudioManager } from "./common/audio/AudioManager";
 import { EventMessage } from "./common/event/EventMessage";
+import { message } from "./common/event/MessageManager";
+import { resLoader } from "./common/loader/ResLoader";
+import { StorageManager } from "./common/storage/StorageManager";
 import { TimerManager } from "./common/timer/TimerManager";
 import { GameManager } from "./game/GameManager";
 import { GUI } from "./gui/GUI";
@@ -36,8 +38,8 @@ export class Root extends Component {
     })
     gui: Node = null!;
 
-    /** 持久根节点 */
-    private persistRootNode: Node = null!
+    /** 框架常驻节点 */
+    private persist: Node = null!
 
     onLoad() {
         if (!isInited) {
@@ -45,22 +47,59 @@ export class Root extends Component {
 
             console.log(`Oops Framework v${version}`);
             this.enabled = false;
+            this.loadConfig();
+        }
+    }
 
-            let config_name = "config";
-            oops.res.load(config_name, JsonAsset, () => {
-                var config = oops.res.get(config_name);
-                // oops.config.btc = new BuildTimeConstants();
-                oops.config.query = new GameQueryConfig();
-                oops.config.game = new GameConfig(config);
-                oops.http.server = oops.config.game.httpServer;                                      // Http 服务器地址
-                oops.http.timeout = oops.config.game.httpTimeout;                                    // Http 请求超时时间
-                oops.storage.init(oops.config.game.localDataKey, oops.config.game.localDataIv);      // 初始化本地存储加密
-                game.frameRate = oops.config.game.frameRate;                                         // 初始化每秒传输帧数
+    private async loadConfig() {
+        // 创建持久根节点
+        this.persist = new Node("OopsFrameworkPersistNode");
+        director.addPersistRootNode(this.persist);
 
-                this.enabled = true;
-                this.init();
-                this.run();
-            });
+        // 资源管理模块
+        oops.res = resLoader;
+
+        const config_name = "config";
+        const config = await oops.res.loadAsync(config_name, JsonAsset);
+        if (config) {
+            // oops.config.btc = new BuildTimeConstants();
+            oops.config.query = new GameQueryConfig();
+            oops.config.game = new GameConfig(config);
+
+            // 本地存储模块
+            oops.storage = new StorageManager();
+            oops.storage.init(oops.config.game.localDataKey, oops.config.game.localDataIv);      // 初始化本地存储加密
+
+            // 全局消息
+            oops.message = message;
+
+            // 创建音频模块
+            oops.audio = this.persist.addComponent(AudioManager);
+            oops.audio.load();
+
+            // 创建时间模块
+            oops.timer = this.persist.addComponent(TimerManager)!;
+
+            // 游戏场景管理
+            oops.game = new GameManager(this.game);
+
+            // 游戏界面管理
+            oops.gui = new LayerManager(this.gui);
+
+            // 网络模块
+            oops.http.server = oops.config.game.httpServer;                                      // Http 服务器地址
+            oops.http.timeout = oops.config.game.httpTimeout;                                    // Http 请求超时时间
+
+            game.frameRate = oops.config.game.frameRate;                                         // 初始化每秒传输帧数
+
+            this.enabled = true;
+            this.init();
+            this.run();
+
+            oops.res.release(config_name);
+        }
+        else {
+            this.loadConfig();
         }
     }
 
@@ -84,47 +123,21 @@ export class Root extends Component {
     }
 
     protected init() {
-        // 创建持久根节点
-        this.persistRootNode = new Node("PersistRootNode");
-        director.addPersistRootNode(this.persistRootNode);
-
-        // 创建音频模块
-        oops.audio = this.persistRootNode.addComponent(AudioManager);
-        oops.audio.load();
-
-        // 创建时间模块
-        oops.timer = this.persistRootNode.addComponent(TimerManager)!;
-
-        oops.language = new LanguageManager();
-        oops.game = new GameManager(this.game);
-        oops.gui = new LayerManager(this.gui);
         this.initGui();
         this.initEcsSystem();
         oops.ecs.init();
 
         // 游戏显示事件
-        game.on(Game.EVENT_SHOW, () => {
-            oops.timer.load();     // 平台不需要在退出时精准计算时间，直接暂时游戏时间
-            oops.audio.resumeAll();
-            director.resume();
-            game.resume();
-            oops.message.dispatchEvent(EventMessage.GAME_SHOW);
-        });
-
+        game.on(Game.EVENT_SHOW, this.onShow, this);
         // 游戏隐藏事件
-        game.on(Game.EVENT_HIDE, () => {
-            oops.timer.save();     // 平台不需要在退出时精准计算时间，直接暂时游戏时间
-            oops.audio.pauseAll();
-            director.pause();
-            game.pause();
-            oops.message.dispatchEvent(EventMessage.GAME_HIDE);
-        });
+        game.on(Game.EVENT_HIDE, this.onHide, this);
+
+        // 添加游戏界面屏幕自适应管理组件
+        this.gui.addComponent(GUI)!;
 
         // 游戏尺寸修改事件
-        var c_gui = this.gui.addComponent(GUI)!;
         if (sys.isMobile == false) {
             screen.on("window-resize", () => {
-                c_gui.resize();
                 oops.message.dispatchEvent(EventMessage.GAME_RESIZE);
             }, this);
 
@@ -136,5 +149,21 @@ export class Root extends Component {
         screen.on("orientation-change", () => {
             oops.message.dispatchEvent(EventMessage.GAME_ORIENTATION);
         }, this);
+    }
+
+    private onShow() {
+        oops.timer.load();              // 处理回到游戏时减去逝去时间
+        oops.audio.resumeAll();         // 恢复所有暂停的音乐播放
+        director.resume();              // 恢复暂停场景的游戏逻辑，如果当前场景没有暂停将没任何事情发生
+        game.resume();                  // 恢复游戏主循环。包含：游戏逻辑，渲染，事件处理，背景音乐和所有音效
+        oops.message.dispatchEvent(EventMessage.GAME_SHOW);
+    }
+
+    private onHide() {
+        oops.timer.save();             // 处理切到后台后记录切出时间
+        oops.audio.pauseAll();         // 暂停所有音乐播放
+        director.pause();              // 暂停正在运行的场景，该暂停只会停止游戏逻辑执行，但是不会停止渲染和 UI 响应。 如果想要更彻底得暂停游戏，包含渲染，音频和事件
+        game.pause();                  // 暂停游戏主循环。包含：游戏逻辑、渲染、输入事件派发（Web 和小游戏平台除外）
+        oops.message.dispatchEvent(EventMessage.GAME_HIDE);
     }
 }

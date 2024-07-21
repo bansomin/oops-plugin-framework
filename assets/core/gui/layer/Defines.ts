@@ -30,7 +30,10 @@ export interface UICallbacks {
      * @param node   当前界面节点
      * @param next   回调方法
      */
-    onBeforeRemove?: (node: Node, next: Function) => void
+    onBeforeRemove?: (node: Node, next: Function) => void,
+
+    /** 网络异常时，窗口加载失败回调 */
+    onLoadFailure?: () => void;
 }
 
 /** 本类型仅供gui模块内部使用，请勿在功能逻辑中使用 */
@@ -45,13 +48,4 @@ export class ViewParams {
     valid: boolean = true;
     /** 界面根节点 */
     node: Node = null!;
-}
-
-/** 弹框层回调对象定义（废弃） */
-export interface PopViewParams extends UICallbacks {
-    /** 是否触摸背景关闭弹窗 */
-    touchClose?: boolean,
-
-    /** 控制暗色背景的透明度 默认为190*/
-    opacity?: number;
 }
