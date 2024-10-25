@@ -26,7 +26,7 @@ export class LayerNotify extends Node {
     constructor(name: string) {
         super(name);
 
-        var widget: Widget = this.addComponent(Widget);
+        const widget: Widget = this.addComponent(Widget);
         widget.isAlignLeft = widget.isAlignRight = widget.isAlignTop = widget.isAlignBottom = true;
         widget.left = widget.right = widget.top = widget.bottom = 0;
         widget.alignMode = 2;
@@ -51,7 +51,7 @@ export class LayerNotify extends Node {
 
     /** 关闭等待提示 */
     waitClose() {
-        if (this.wait.parent) {
+        if (this.wait && this.wait.parent) {
             this.wait.parent = null;
             this.black.enabled = false;
         }

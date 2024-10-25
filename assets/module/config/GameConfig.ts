@@ -50,6 +50,10 @@ export class GameConfig {
     get languagePathTexture(): string {
         return this._data.language.path.texture || "language/texture";
     }
+    /** 默认语言 */
+    get languageDefault(): string {
+        return this._data.language.default || "zh";
+    }
 
     /** 是否启用远程资源 */
     get bundleEnable(): string {
@@ -60,17 +64,22 @@ export class GameConfig {
         return this._data.bundle.server;
     }
     /** 远程资源名 */
-    get bundleName(): string {
-        return this._data.bundle.name;
+    get bundleDefault(): string {
+        return this._data.bundle.default;
     }
-    /** 远程资源版本号 */
-    get bundleVersion(): string {
-        return this._data.bundle.version;
+    /** 远程所有资源包配置 */
+    get bundlePackages(): string {
+        return this._data.bundle.packages;
     }
 
-    private _data: any = null;
+    /** 加载界面资源超时提示 */
+    get loadingTimeoutGui(): number {
+        return this._data.config.loadingTimeoutGui || 1000;
+    }
+
+    private readonly _data: any = null;
     /** 游戏配置数据 */
-    public get data(): any {
+    get data(): any {
         return this._data;
     }
 

@@ -25,7 +25,7 @@ function broadcastCompAddOrRemove(entity: ECSEntity, componentTypeId: number) {
  * @param ctor
  */
 function createComp<T extends ecs.IComp>(ctor: CompCtor<T>): T {
-    var cct = ECSModel.compCtors[ctor.tid];
+    const cct = ECSModel.compCtors[ctor.tid];
     if (!cct) {
         throw Error(`没有找到该组件的构造函数，检查${ctor.compName}是否为不可构造的组件`);
     }
@@ -37,12 +37,12 @@ function createComp<T extends ecs.IComp>(ctor: CompCtor<T>): T {
 /**
  * 销毁实体
  * 
- * 缓存销毁的实体，下次新建实体时会优先从缓存中拿。
+ * 缓存销毁的实体，下次新建实体时会优先从缓存中拿
  * @param entity 
  */
 function destroyEntity(entity: ECSEntity) {
     if (ECSModel.eid2Entity.has(entity.eid)) {
-        var entitys = ECSModel.entityPool.get(entity.name);
+        let entitys = ECSModel.entityPool.get(entity.name);
         if (entitys == null) {
             entitys = [];
             ECSModel.entityPool.set(entity.name, entitys);
@@ -75,6 +75,9 @@ export class ECSEntity {
     get parent(): ECSEntity | null {
         return this._parent;
     }
+    set parent(value: ECSEntity | null) {
+        this._parent = value;
+    }
 
     private _children: Map<number, ECSEntity> | null = null;
     /** 子实体集合 */
@@ -96,17 +99,16 @@ export class ECSEntity {
 
     /**
      * 移除子实体
-     * @param entity 被移除的实体对象
+     * @param entity    被移除的实体对象
+     * @param isDestroy 被移除的实体是否释放，默认为释放
      * @returns 
      */
-    removeChild(entity: ECSEntity) {
+    removeChild(entity: ECSEntity, isDestroy = true) {
         if (this.children == null) return;
 
+        entity.parent = null;
         this.children.delete(entity.eid);
-
-        if (this.children.size == 0) {
-            this._children = null;
-        }
+        if (isDestroy) entity.destroy();
     }
 
     /**
@@ -117,8 +119,6 @@ export class ECSEntity {
      * @param isReAdd           true-表示用户指定这个实体可能已经存在了该组件，那么再次add组件的时候会先移除该组件然后再添加一遍。false-表示不重复添加组件
      */
     add<T extends ecs.IComp>(obj: T): ECSEntity;
-    add(ctor: number, isReAdd?: boolean): ECSEntity;
-    add<T extends ecs.IComp>(ctor: CompCtor<T>, isReAdd?: boolean): T;
     add<T extends ecs.IComp>(ctor: CompType<T>, isReAdd?: boolean): T;
     add<T extends ecs.IComp>(ctor: CompType<T> | T, isReAdd: boolean = false): T | ECSEntity {
         if (typeof ctor === 'function') {
@@ -263,21 +263,29 @@ export class ECSEntity {
         }
     }
 
-    private _remove(comp: CompType<ecs.IComp>) {
-        this.remove(comp, true);
-    }
-
     /** 销毁实体，实体会被回收到实体缓存池中 */
     destroy() {
+        // 如果有父模块，则移除父模块上记录的子模块
+        if (this._parent) {
+            this._parent.removeChild(this, false);
+            this._parent = null;
+        }
+
+        // 移除模块上所有子模块
         if (this._children) {
             this._children.forEach(e => {
                 this.removeChild(e);
-                e.destroy();
             });
+            this._children = null;
         }
 
+        // 移除实体上所有组件
         this.compTid2Ctor.forEach(this._remove, this);
         destroyEntity(this);
         this.compTid2Obj.clear();
+    }
+
+    private _remove(comp: CompType<ecs.IComp>) {
+        this.remove(comp, true);
     }
 }

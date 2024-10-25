@@ -39,8 +39,8 @@ export class LayerDialog extends LayerPopUp {
     }
 
     /** 显示模式弹窗 */
-    private show(config: UIConfig, params?: any, callbacks?: UICallbacks): string {
-        var vp = this.ui_cache.get(config.prefab);
+    private show(config: UIConfig, params?: any, callbacks?: UICallbacks) {
+        let vp = this.ui_cache.get(config.prefab);
         if (vp == null) {
             vp = new ViewParams();
             vp.valid = true;
@@ -52,8 +52,6 @@ export class LayerDialog extends LayerPopUp {
         this.ui_nodes.set(vp.config.prefab, vp);
 
         this.load(vp, config.bundle);
-
-        return config.prefab;
     }
 
     protected onCloseWindow(vp: ViewParams) {

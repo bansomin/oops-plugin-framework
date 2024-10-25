@@ -54,9 +54,8 @@ export class ViewUtil {
      * @param aPos      A节点空间中的相对位置
      */
     static calculateASpaceToBSpacePos(a: Node, b: Node, aPos: Vec3): Vec3 {
-        var world: Vec3 = a.getComponent(UITransform)!.convertToWorldSpaceAR(aPos);
-        var space: Vec3 = b.getComponent(UITransform)!.convertToNodeSpaceAR(world);
-        return space;
+        const world: Vec3 = a.getComponent(UITransform)!.convertToWorldSpaceAR(aPos);
+        return b.getComponent(UITransform)!.convertToNodeSpaceAR(world);
     }
 
     /**
@@ -65,10 +64,9 @@ export class ViewUtil {
      * @param space 转到此节点的坐标空间
      */
     static calculateScreenPosToSpacePos(event: EventTouch, space: Node): Vec3 {
-        let uil = event.getUILocation();
-        let worldPos: Vec3 = v3(uil.x, uil.y);
-        let mapPos: Vec3 = space.getComponent(UITransform)!.convertToNodeSpaceAR(worldPos);
-        return mapPos;
+        const uil = event.getUILocation();
+        const worldPos: Vec3 = v3(uil.x, uil.y);
+        return space.getComponent(UITransform)!.convertToNodeSpaceAR(worldPos);
     }
 
     /**
@@ -79,39 +77,41 @@ export class ViewUtil {
      * @param defaultHeight     默认高
      */
     static uniformScale(targetWidth: number, targetHeight: number, defaultWidth: number, defaultHeight: number) {
-        var widthRatio = defaultWidth / targetWidth;
-        var heightRatio = defaultHeight / targetHeight;
-        var ratio;
+        const widthRatio = defaultWidth / targetWidth;
+        const heightRatio = defaultHeight / targetHeight;
+        let ratio;
         widthRatio < heightRatio ? ratio = widthRatio : ratio = heightRatio;
-        var size = new Size(Math.floor(targetWidth * ratio), Math.floor(targetHeight * ratio));
-        return size;
+        return new Size(Math.floor(targetWidth * ratio), Math.floor(targetHeight * ratio));
     }
 
     /**
      * 从资源缓存中找到预制资源名并创建一个显示对象（建议使用GameComponent里的同名方法，能自动管理内存施放）
-     * @param path 资源路径
+     * @param path        资源路径
+     * @param bundleName  资源包名
      */
-    static createPrefabNode(path: string): Node {
-        var p: Prefab = resLoader.get(path, Prefab)!;
-        var n = instantiate(p);
-        return n;
+    static createPrefabNode(path: string, bundleName: string = resLoader.defaultBundleName): Node {
+        const p = resLoader.get(path, Prefab, bundleName);
+        if (p) {
+            return instantiate(p);
+        }
+        return null!;
     }
 
     /**
      * 加载预制并创建预制节点（建议使用GameComponent里的同名方法，能自动管理内存施放）
-     * @param path 资源路径
+     * @param path        资源路径
+     * @param bundleName  资源包名
      */
-    static createPrefabNodeAsync(path: string): Promise<Node> {
+    static createPrefabNodeAsync(path: string, bundleName: string = resLoader.defaultBundleName): Promise<Node> {
         return new Promise(async (resolve, reject) => {
-            resLoader.load(path, Prefab, (err: Error | null, content: Prefab) => {
-                if (err) {
-                    console.error(`名为【${path}】的资源加载失败`);
-                    return;
-                }
-
-                var node = this.createPrefabNode(path);
-                resolve(node);
-            });
+            const p = await resLoader.loadAsync(bundleName, path, Prefab);
+            if (p) {
+                resolve(instantiate(p));
+            }
+            else {
+                console.error(`名为【${path}】的资源加载失败`);
+                resolve(null!);
+            }
         });
     }
 
@@ -127,12 +127,12 @@ export class ViewUtil {
             return;
         }
 
-        var anim = node.getComponent(Animation);
+        let anim = node.getComponent(Animation);
         if (anim == null) {
             anim = node.addComponent(Animation);
         }
 
-        var clip = resLoader.get(path, AnimationClip) as AnimationClip;
+        const clip = resLoader.get(path, AnimationClip) as AnimationClip;
         if (!clip) {
             return;
         }

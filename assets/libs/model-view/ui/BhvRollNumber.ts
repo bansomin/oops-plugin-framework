@@ -1,4 +1,4 @@
-import { Component, Enum, Label, lerp, _decorator } from "cc";
+import { _decorator, Component, Enum, Label, lerp } from "cc";
 
 const { ccclass, property, menu } = _decorator;
 
@@ -20,11 +20,11 @@ enum VALUE_TYPE {
 type CustomCallback = (curValue: number, targetValue: number) => string;
 
 /**
- * [滚动数字] ver 0.5.0
+ * 滚动数字
  * 将会使用 lerp 自动滚动数字到目标数值
  */
 @ccclass
-@menu("添加特殊行为/UI/Roll Number (滚动数字)")
+@menu("OopsFramework/UI/Roll Number （滚动数字）")
 export class BhvRollNumber extends Component {
     @property({
         type: Label,
@@ -84,7 +84,7 @@ export class BhvRollNumber extends Component {
     private valueType: VALUE_TYPE = VALUE_TYPE.INTEGER;
 
     /** 自定义string 处理函数 */
-    private _custom_callback: CustomCallback | null = null;
+    onCustom: CustomCallback | null = null;
 
     private isScrolling: boolean = false;
 
@@ -171,8 +171,8 @@ export class BhvRollNumber extends Component {
                 }
                 break;
             case VALUE_TYPE.CUSTOMER: // 自定义设置模式 (通过给定的自定义函数..处理)
-                if (this._custom_callback) {
-                    string = this._custom_callback(this.value, this.targetValue);
+                if (this.onCustom) {
+                    string = this.onCustom(this.value, this.targetValue);
                 }
                 break;
             default:

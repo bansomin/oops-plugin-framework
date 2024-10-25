@@ -1,12 +1,21 @@
-import { Camera, Layers, Node, warn, Widget } from "cc";
-import { GUI } from "../GUI";
+import { Camera, Layers, Node, ResolutionPolicy, Widget, screen, view, warn } from "cc";
+import { oops } from "../../Oops";
 import { UICallbacks } from "./Defines";
 import { DelegateComponent } from "./DelegateComponent";
 import { LayerDialog } from "./LayerDialog";
 import { LayerNotify } from "./LayerNotify";
 import { LayerPopUp } from "./LayerPopup";
 import { LayerUI } from "./LayerUI";
-import { UIMap } from "./UIMap";
+
+/** 屏幕适配类型 */
+export enum ScreenAdapterType {
+    /** 自动适配 */
+    Auto,
+    /** 横屏适配 */
+    Landscape,
+    /** 竖屏适配 */
+    Portrait
+}
 
 /** 界面层类型 */
 export enum LayerType {
@@ -28,6 +37,7 @@ export enum LayerType {
 
 /** 
  * 界面配置结构体
+ * @help    https://gitee.com/dgflash/oops-framework/wikis/pages?sort_id=12037986&doc_id=2873565
  * @example
 // 界面唯一标识
 export enum UIID {
@@ -51,13 +61,13 @@ export interface UIConfig {
     layer: LayerType;
     /** 预制资源相对路径 */
     prefab: string;
-    /** 是否自动施放 */
+    /** 是否自动施放（默认不自动释放） */
     destroy?: boolean;
 
     /** -----弹窗属性----- */
-    /** 是否触摸非窗口区域关闭 */
+    /** 是否触摸非窗口区域关闭（默认关闭） */
     vacancy?: boolean,
-    /** 是否打开窗口后显示背景遮罩 */
+    /** 是否打开窗口后显示背景遮罩（默认关闭） */
     mask?: boolean;
 }
 
@@ -71,25 +81,66 @@ export class LayerManager {
     game!: Node;
     /** 新手引导层 */
     guide!: Node;
-    /** 界面地图 */
-    uiMap!: UIMap;
 
     /** 界面层 */
-    private ui!: LayerUI;
+    private readonly ui!: LayerUI;
     /** 弹窗层 */
-    private popup!: LayerPopUp;
+    private readonly popup!: LayerPopUp;
     /** 只能弹出一个的弹窗 */
-    private dialog!: LayerDialog;
+    private readonly dialog!: LayerDialog;
     /** 游戏系统提示弹窗  */
-    private system!: LayerDialog;
+    private readonly system!: LayerDialog;
     /** 消息提示控制器，请使用show方法来显示 */
-    private notify!: LayerNotify;
+    private readonly notify!: LayerNotify;
     /** UI配置 */
     private configs: { [key: number]: UIConfig } = {};
 
-    /** 是否为竖屏显示 */
-    get portrait() {
-        return this.root.getComponent(GUI)!.portrait;
+    private initScreenAdapter() {
+        const drs = view.getDesignResolutionSize();
+        const ws = screen.windowSize;
+        const windowAspectRatio = ws.width / ws.height;
+        const designAspectRatio = drs.width / drs.height;
+
+        let finalW: number = 0;
+        let finalH: number = 0;
+
+        if (windowAspectRatio > designAspectRatio) {
+            finalH = drs.height;
+            finalW = finalH * ws.width / ws.height;
+            oops.log.logView("适配屏幕高度", "【横屏】");
+        }
+        else {
+            finalW = drs.width;
+            finalH = finalW * ws.height / ws.width;
+            oops.log.logView("适配屏幕宽度", "【竖屏】");
+        }
+        view.setDesignResolutionSize(finalW, finalH, ResolutionPolicy.UNKNOWN);
+    }
+
+    /**
+     * 构造函数
+     * @param root  界面根节点
+     */
+    constructor(root: Node) {
+        this.root = root;
+        this.initScreenAdapter();
+        this.camera = this.root.getComponentInChildren(Camera)!;
+        this.game = this.create_node(LayerType.Game);
+
+        this.ui = new LayerUI(LayerType.UI);
+        this.popup = new LayerPopUp(LayerType.PopUp);
+        this.dialog = new LayerDialog(LayerType.Dialog);
+        this.system = new LayerDialog(LayerType.System);
+        this.notify = new LayerNotify(LayerType.Notify);
+        this.guide = this.create_node(LayerType.Guide);
+
+        root.addChild(this.game);
+        root.addChild(this.ui);
+        root.addChild(this.popup);
+        root.addChild(this.dialog);
+        root.addChild(this.system);
+        root.addChild(this.notify);
+        root.addChild(this.guide);
     }
 
     /**
@@ -98,6 +149,14 @@ export class LayerManager {
      */
     init(configs: { [key: number]: UIConfig }): void {
         this.configs = configs;
+    }
+
+    /**
+     * 设置窗口打开失败回调
+     * @param callback  回调方法
+     */
+    setOpenFailure(callback: Function) {
+        this.ui.onOpenFailure = this.popup.onOpenFailure = this.dialog.onOpenFailure = this.system.onOpenFailure = callback;
     }
 
     /**
@@ -131,17 +190,6 @@ export class LayerManager {
     }
 
     /**
-     * 设置界面地图配置
-     * @param data 界面地图数据
-     */
-    setUIMap(data: any) {
-        if (this.uiMap == null) {
-            this.uiMap = new UIMap();
-        }
-        this.uiMap.init(this, data);
-    }
-
-    /**
      * 同步打开一个窗口
      * @param uiId          窗口唯一编号
      * @param uiArgs        窗口参数
@@ -158,7 +206,7 @@ export class LayerManager {
     oops.gui.open(UIID.Loading, null, uic);
      */
     open(uiId: number, uiArgs: any = null, callbacks?: UICallbacks): void {
-        var config = this.configs[uiId];
+        const config = this.configs[uiId];
         if (config == null) {
             warn(`打开编号为【${uiId}】的界面失败，配置信息不存在`);
             return;
@@ -189,7 +237,7 @@ export class LayerManager {
      */
     async openAsync(uiId: number, uiArgs: any = null): Promise<Node | null> {
         return new Promise<Node | null>((resolve, reject) => {
-            var callbacks: UICallbacks = {
+            const callbacks: UICallbacks = {
                 onAdded: (node: Node, params: any) => {
                     resolve(node);
                 },
@@ -208,8 +256,13 @@ export class LayerManager {
      * @param uiArgs      新打开场景参数
      */
     replace(removeUiId: number, openUiId: number, uiArgs: any = null) {
-        this.open(openUiId, uiArgs);
-        this.remove(removeUiId);
+        const callbacks: UICallbacks = {
+            onAdded: (node: Node, params: any) => {
+                this.remove(removeUiId);
+            }
+        };
+        this.open(openUiId, uiArgs, callbacks);
+
     }
 
     /**
@@ -220,9 +273,14 @@ export class LayerManager {
      */
     replaceAsync(removeUiId: number, openUiId: number, uiArgs: any = null): Promise<Node | null> {
         return new Promise<Node | null>(async (resolve, reject) => {
-            var node = await this.openAsync(openUiId, uiArgs);
-            this.remove(removeUiId);
-            resolve(node);
+            const node = await this.openAsync(openUiId, uiArgs);
+            if (node) {
+                this.remove(removeUiId);
+                resolve(node);
+            }
+            else {
+                resolve(null);
+            }
         });
     }
 
@@ -233,7 +291,7 @@ export class LayerManager {
      * oops.gui.has(UIID.Loading);
      */
     has(uiId: number): boolean {
-        var config = this.configs[uiId];
+        const config = this.configs[uiId];
         if (config == null) {
             warn(`编号为【${uiId}】的界面配置不存在，配置信息不存在`);
             return false;
@@ -254,6 +312,7 @@ export class LayerManager {
                 result = this.system.has(config.prefab);
                 break;
         }
+
         return result;
     }
 
@@ -264,13 +323,13 @@ export class LayerManager {
      * oops.gui.has(UIID.Loading);
      */
     get(uiId: number): Node {
-        var config = this.configs[uiId];
+        const config = this.configs[uiId];
         if (config == null) {
             warn(`编号为【${uiId}】的界面配置不存在，配置信息不存在`);
             return null!;
         }
 
-        var result: Node = null!;
+        let result: Node = null!;
         switch (config.layer) {
             case LayerType.UI:
                 result = this.ui.get(config.prefab);
@@ -296,7 +355,7 @@ export class LayerManager {
      * oops.gui.remove(UIID.Loading);
      */
     remove(uiId: number, isDestroy?: boolean) {
-        var config = this.configs[uiId];
+        const config = this.configs[uiId];
         if (config == null) {
             warn(`删除编号为【${uiId}】的界面失败，配置信息不存在`);
             return;
@@ -375,37 +434,10 @@ export class LayerManager {
         this.system.clear(isDestroy);
     }
 
-    /**
-     * 构造函数
-     * @param root  界面根节点
-     */
-    constructor(root: Node) {
-        this.root = root;
-        this.camera = this.root.getComponentInChildren(Camera)!;
-
-        this.game = this.create_node(LayerType.Game);
-
-        this.ui = new LayerUI(LayerType.UI);
-        this.popup = new LayerPopUp(LayerType.PopUp);
-        this.dialog = new LayerDialog(LayerType.Dialog);
-        this.system = new LayerDialog(LayerType.System);
-        this.notify = new LayerNotify(LayerType.Notify);
-
-        this.guide = this.create_node(LayerType.Guide);
-
-        root.addChild(this.game);
-        root.addChild(this.ui);
-        root.addChild(this.popup);
-        root.addChild(this.dialog);
-        root.addChild(this.system);
-        root.addChild(this.notify);
-        root.addChild(this.guide);
-    }
-
     private create_node(name: string) {
-        var node = new Node(name);
+        const node = new Node(name);
         node.layer = Layers.Enum.UI_2D;
-        var w: Widget = node.addComponent(Widget);
+        const w: Widget = node.addComponent(Widget);
         w.isAlignLeft = w.isAlignRight = w.isAlignTop = w.isAlignBottom = true;
         w.left = w.right = w.top = w.bottom = 0;
         w.alignMode = 2;

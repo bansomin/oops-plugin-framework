@@ -1,9 +1,13 @@
 import { Label, _decorator } from "cc";
+import { oops } from "../../../core/Oops";
+import { EventMessage } from "../../../core/common/event/EventMessage";
+import { TimeUtil } from "../../../core/utils/TimeUtils";
 
 const { ccclass, property, menu } = _decorator;
 
+/** 倒计时标签 */
 @ccclass("LabelTime")
-@menu('ui/label/LabelTime')
+@menu('OopsFramework/Label/LabelTime （倒计时标签）')
 export default class LabelTime extends Label {
     @property({
         tooltip: "到计时间总时间（单位秒）"
@@ -25,8 +29,9 @@ export default class LabelTime extends Label {
     })
     zeroize: boolean = true;
 
-    private dateDisable!: boolean;
-    private result!: string;
+    private backStartTime: number = 0;      // 进入后台开始时间
+    private dateDisable!: boolean;          // 时间能否由天数显示
+    private result!: string;                // 时间结果字符串
 
     /** 每秒触发事件 */
     onSecond: Function = null!;
@@ -107,15 +112,51 @@ export default class LabelTime extends Label {
         this.dateDisable = flag;
     }
 
-    /** 设置倒计时时间 */
+    /**
+     * 设置倒计时时间
+     * @param second        倒计时时间（单位秒）
+     */
     setTime(second: number) {
         this.countDown = second;                                             // 倒计时，初始化显示字符串
         this.timing_end();
         this.timing_start();
+        this.format();
+    }
+
+    /**
+     * 设置结束时间戳倒计时
+     * @param timeStamp     时间戳
+     */
+    setTimeStamp(timeStamp: number) {
+        this.countDown = TimeUtil.secsBetween(oops.timer.getServerTime(), timeStamp);
+        this.timing_end();
+        this.timing_start();
+        this.format();
     }
 
     start() {
+        oops.message.on(EventMessage.GAME_SHOW, this.onGameShow, this);
+        oops.message.on(EventMessage.GAME_HIDE, this.onGameHide, this);
         this.timing_start();
+        this.format();
+    }
+
+    onDestroy() {
+        oops.message.off(EventMessage.GAME_SHOW, this.onGameShow, this);
+        oops.message.off(EventMessage.GAME_HIDE, this.onGameHide, this);
+    }
+
+    private onGameShow() {
+        const interval = Math.floor((oops.timer.getTime() - (this.backStartTime || oops.timer.getTime())) / 1000);
+        this.countDown -= interval;
+        if (this.countDown < 0) {
+            this.countDown = 0;
+            this.onScheduleComplete();
+        }
+    }
+
+    private onGameHide() {
+        this.backStartTime = oops.timer.getTime();
     }
 
     private onScheduleSecond() {
@@ -130,17 +171,16 @@ export default class LabelTime extends Label {
 
     private onScheduleComplete() {
         this.timing_end();
+        this.format();
         if (this.onComplete) this.onComplete(this.node);
     }
 
     /** 开始计时 */
     private timing_start() {
         this.schedule(this.onScheduleSecond, 1);
-        this.format();
     }
 
     private timing_end() {
         this.unscheduleAllCallbacks();
-        this.format();
     }
 }

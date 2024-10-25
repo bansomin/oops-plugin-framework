@@ -12,8 +12,9 @@ export class LangLabelParamsItem {
     value: string = "";
 }
 
+/** 文本多语言 */
 @ccclass("LanguageLabel")
-@menu('ui/language/LanguageLabel')
+@menu('OopsFramework/Language/LanguageLabel （文本多语言）')
 export class LanguageLabel extends Component {
     @property({
         type: LangLabelParamsItem,
@@ -106,19 +107,19 @@ export class LanguageLabel extends Component {
     }
 
     updateContent() {
-        var label = this.getComponent(Label);
-        var richtext = this.getComponent(RichText);
-        var font: TTFFont | null = LanguageData.font
+        const label = this.getComponent(Label);
+        const richtext = this.getComponent(RichText);
+        const font: TTFFont | null = LanguageData.font;
 
         if (label) {
-            if (font && !label.useSystemFont) {
+            if (font) {
                 label.font = font;
             }
             label.string = this.string;
             this.initFontSize = label.fontSize;
         }
         else if (richtext) {
-            if (font && !richtext.useSystemFont) {
+            if (font) {
                 richtext.font = font;
             }
             this.initFontSize = richtext.fontSize;

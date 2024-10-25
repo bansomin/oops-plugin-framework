@@ -4,13 +4,12 @@
  * @LastEditors: dgflash
  * @LastEditTime: 2022-12-13 11:36:00
  */
-import { Asset, Button, Component, EventHandler, EventKeyboard, EventTouch, Input, Node, Prefab, __private, _decorator, input, instantiate } from "cc";
+import { Asset, Button, Component, EventHandler, EventKeyboard, EventTouch, Input, Node, Sprite, SpriteFrame, __private, _decorator, input, isValid } from "cc";
 import { oops } from "../../core/Oops";
 import { EventDispatcher } from "../../core/common/event/EventDispatcher";
 import { EventMessage, ListenerFunc } from "../../core/common/event/EventMessage";
-import { AssetType, CompleteCallback, ProgressCallback } from "../../core/common/loader/ResLoader";
+import { AssetType, CompleteCallback, Paths, ProgressCallback, resLoader } from "../../core/common/loader/ResLoader";
 import { ViewUtil } from "../../core/utils/ViewUtil";
-import { ButtonTouchLong } from "../../libs/gui/button/ButtonTouchLong";
 
 const { ccclass } = _decorator;
 
@@ -23,8 +22,12 @@ enum ResType {
 
 /** 资源加载记录 */
 interface ResRecord {
+    /** 资源包名 */
     bundle: string,
-    path: string
+    /** 资源路径 */
+    path: string,
+    /** 资源编号 */
+    resId?: number
 }
 
 /** 
@@ -93,29 +96,17 @@ export class GameComponent extends Component {
      * 从资源缓存中找到预制资源名并创建一个显示对象
      * @param path 资源路径
      */
-    createPrefabNode(path: string): Node {
-        var p: Prefab = oops.res.get(path, Prefab)!;
-        var n = instantiate(p);
-        return n;
+    createPrefabNode(path: string, bundleName: string = oops.res.defaultBundleName): Node {
+        return ViewUtil.createPrefabNode(path, bundleName);
     }
 
     /**
      * 加载预制并创建预制节点
-     * @param path 资源路径
+     * @param path       资源路径
+     * @param bundleName 资源包名
      */
-    createPrefabNodeAsync(path: string): Promise<Node> {
-        return new Promise((resolve, reject) => {
-            this.load(path, Prefab, (err: Error | null, content: Prefab) => {
-                if (err) {
-                    console.error(`名为【${path}】的资源加载失败`);
-                    resolve(null!);
-                }
-                else {
-                    var node = instantiate(content);
-                    resolve(node);
-                }
-            });
-        });
+    createPrefabNodeAsync(path: string, bundleName: string = oops.res.defaultBundleName): Promise<Node> {
+        return ViewUtil.createPrefabNodeAsync(path, bundleName);
     }
     //#endregion
 
@@ -139,7 +130,7 @@ export class GameComponent extends Component {
      * @param bundleName    资源包名
      * @param paths         资源路径
      */
-    private addPathToRecord<T>(type: ResType, bundleName: string, paths?: string | string[] | AssetType<T> | ProgressCallback | CompleteCallback | null) {
+    private addPathToRecord<T>(type: ResType, bundleName: string, paths?: string | string[] | AssetType<T> | ProgressCallback | CompleteCallback | null, resId?: number) {
         if (this.resPaths == null) this.resPaths = new Map();
 
         var rps = this.resPaths.get(type);
@@ -152,79 +143,102 @@ export class GameComponent extends Component {
             let realBundle = bundleName;
             for (let index = 0; index < paths.length; index++) {
                 let realPath = paths[index];
-                let key = `${realBundle}:${realPath}`;
+                let key = this.getResKey(realBundle, realPath, resId);
                 if (!rps.has(key)) {
-                    rps.set(key, { path: realPath, bundle: realBundle })
+                    rps.set(key, { path: realPath, bundle: realBundle, resId: resId });
                 }
             }
         }
         else if (typeof paths === "string") {
             let realBundle = bundleName;
             let realPath = paths;
-            let key = `${realBundle}:${realPath}`;
+            let key = this.getResKey(realBundle, realPath, resId);
             if (!rps.has(key)) {
-                rps.set(key, { path: realPath, bundle: realBundle })
+                rps.set(key, { path: realPath, bundle: realBundle, resId: resId });
             }
         }
         else {
             let realBundle = oops.res.defaultBundleName;
             let realPath = bundleName;
-            let key = `${realBundle}:${realPath}`;
+            let key = this.getResKey(realBundle, realPath, resId);
             if (!rps.has(key)) {
-                rps.set(key, { path: realPath, bundle: realBundle })
+                rps.set(key, { path: realPath, bundle: realBundle, resId: resId });
             }
         }
     }
 
-    /** 异步加载资源 */
-    loadAsync<T extends Asset>(bundleName: string, paths: string | string[], type: AssetType<T> | null): Promise<T>;
-    loadAsync<T extends Asset>(bundleName: string, paths: string | string[]): Promise<T>;
-    loadAsync<T extends Asset>(bundleName: string, paths: string | string[]): Promise<T>;
-    loadAsync<T extends Asset>(bundleName: string, paths: string | string[], type: AssetType<T> | null): Promise<T>;
-    loadAsync<T extends Asset>(paths: string | string[], type: AssetType<T> | null): Promise<T>;
-    loadAsync<T extends Asset>(paths: string | string[]): Promise<T>;
-    loadAsync<T extends Asset>(paths: string | string[]): Promise<T>;
-    loadAsync<T extends Asset>(paths: string | string[], type: AssetType<T> | null): Promise<T>;
-    loadAsync<T extends Asset>(bundleName: string, paths?: string | string[] | AssetType<T> | ProgressCallback | CompleteCallback | null, type?: AssetType<T> | ProgressCallback | CompleteCallback | null): Promise<T> {
-        this.addPathToRecord(ResType.Load, bundleName, paths);
-        return oops.res.loadAsync(bundleName, paths, type);
+    private getResKey(realBundle: string, realPath: string, resId?: number): string {
+        let key = `${realBundle}:${realPath}`;
+        if (resId != null) key += ":" + resId;
+        return key;
     }
 
-    /** 加载资源 */
-    load<T extends Asset>(bundleName: string, paths: string | string[], type: AssetType<T> | null, onProgress: ProgressCallback | null, onComplete: CompleteCallback<T> | null): void;
-    load<T extends Asset>(bundleName: string, paths: string | string[], onProgress: ProgressCallback | null, onComplete: CompleteCallback<T> | null): void;
-    load<T extends Asset>(bundleName: string, paths: string | string[], onComplete?: CompleteCallback<T> | null): void;
-    load<T extends Asset>(bundleName: string, paths: string | string[], type: AssetType<T> | null, onComplete?: CompleteCallback<T> | null): void;
-    load<T extends Asset>(paths: string | string[], type: AssetType<T> | null, onProgress: ProgressCallback | null, onComplete: CompleteCallback<T> | null): void;
-    load<T extends Asset>(paths: string | string[], onProgress: ProgressCallback | null, onComplete: CompleteCallback<T> | null): void;
-    load<T extends Asset>(paths: string | string[], onComplete?: CompleteCallback<T> | null): void;
-    load<T extends Asset>(paths: string | string[], type: AssetType<T> | null, onComplete?: CompleteCallback<T> | null): void;
+    /**
+     * 加载一个资源
+     * @param bundleName    远程包名
+     * @param paths         资源路径
+     * @param type          资源类型
+     * @param onProgress    加载进度回调
+     * @param onComplete    加载完成回调
+     */
+    load<T extends Asset>(bundleName: string, paths: Paths, type: AssetType<T>, onProgress: ProgressCallback, onComplete: CompleteCallback): void;
+    load<T extends Asset>(bundleName: string, paths: Paths, onProgress: ProgressCallback, onComplete: CompleteCallback): void;
+    load<T extends Asset>(bundleName: string, paths: Paths, onComplete?: CompleteCallback): void;
+    load<T extends Asset>(bundleName: string, paths: Paths, type: AssetType<T>, onComplete?: CompleteCallback): void;
+    load<T extends Asset>(paths: Paths, type: AssetType<T>, onProgress: ProgressCallback, onComplete: CompleteCallback): void;
+    load<T extends Asset>(paths: Paths, onProgress: ProgressCallback, onComplete: CompleteCallback): void;
+    load<T extends Asset>(paths: Paths, onComplete?: CompleteCallback): void;
+    load<T extends Asset>(paths: Paths, type: AssetType<T>, onComplete?: CompleteCallback): void;
     load<T extends Asset>(
         bundleName: string,
-        paths?: string | string[] | AssetType<T> | ProgressCallback | CompleteCallback | null,
-        type?: AssetType<T> | ProgressCallback | CompleteCallback | null,
-        onProgress?: ProgressCallback | CompleteCallback | null,
-        onComplete?: CompleteCallback | null,
+        paths?: Paths | AssetType<T> | ProgressCallback | CompleteCallback,
+        type?: AssetType<T> | ProgressCallback | CompleteCallback,
+        onProgress?: ProgressCallback | CompleteCallback,
+        onComplete?: CompleteCallback,
     ) {
         this.addPathToRecord(ResType.Load, bundleName, paths);
         oops.res.load(bundleName, paths, type, onProgress, onComplete);
     }
 
-    /** 加载文件名中资源 */
-    loadDir<T extends Asset>(bundleName: string, dir: string, type: AssetType<T> | null, onProgress: ProgressCallback | null, onComplete: CompleteCallback<T[]> | null): void;
-    loadDir<T extends Asset>(bundleName: string, dir: string, onProgress: ProgressCallback | null, onComplete: CompleteCallback<T[]> | null): void;
-    loadDir<T extends Asset>(bundleName: string, dir: string, onComplete?: CompleteCallback<T[]> | null): void;
-    loadDir<T extends Asset>(bundleName: string, dir: string, type: AssetType<T> | null, onComplete?: CompleteCallback<T[]> | null): void;
-    loadDir<T extends Asset>(dir: string, type: AssetType<T> | null, onProgress: ProgressCallback | null, onComplete: CompleteCallback<T[]> | null): void;
-    loadDir<T extends Asset>(dir: string, onProgress: ProgressCallback | null, onComplete: CompleteCallback<T[]> | null): void;
-    loadDir<T extends Asset>(dir: string, onComplete?: CompleteCallback<T[]> | null): void;
-    loadDir<T extends Asset>(dir: string, type: AssetType<T> | null, onComplete?: CompleteCallback<T[]> | null): void;
+    /**
+     * 异步加载一个资源
+     * @param bundleName    远程包名
+     * @param paths         资源路径
+     * @param type          资源类型
+     */
+    loadAsync<T extends Asset>(bundleName: string, paths: Paths, type: AssetType<T>): Promise<T>;
+    loadAsync<T extends Asset>(bundleName: string, paths: Paths): Promise<T>;
+    loadAsync<T extends Asset>(paths: Paths, type: AssetType<T>): Promise<T>;
+    loadAsync<T extends Asset>(paths: Paths): Promise<T>;
+    loadAsync<T extends Asset>(bundleName: string,
+        paths?: Paths | AssetType<T> | ProgressCallback | CompleteCallback,
+        type?: AssetType<T> | ProgressCallback | CompleteCallback): Promise<T> {
+        this.addPathToRecord(ResType.Load, bundleName, paths);
+        return oops.res.loadAsync(bundleName, paths, type);
+    }
+
+    /**
+     * 加载文件夹中的资源
+     * @param bundleName    远程包名
+     * @param dir           文件夹名
+     * @param type          资源类型
+     * @param onProgress    加载进度回调
+     * @param onComplete    加载完成回调
+     */
+    loadDir<T extends Asset>(bundleName: string, dir: string, type: AssetType<T>, onProgress: ProgressCallback, onComplete: CompleteCallback): void;
+    loadDir<T extends Asset>(bundleName: string, dir: string, onProgress: ProgressCallback, onComplete: CompleteCallback): void;
+    loadDir<T extends Asset>(bundleName: string, dir: string, onComplete?: CompleteCallback): void;
+    loadDir<T extends Asset>(bundleName: string, dir: string, type: AssetType<T>, onComplete?: CompleteCallback): void;
+    loadDir<T extends Asset>(dir: string, type: AssetType<T>, onProgress: ProgressCallback, onComplete: CompleteCallback): void;
+    loadDir<T extends Asset>(dir: string, onProgress: ProgressCallback, onComplete: CompleteCallback): void;
+    loadDir<T extends Asset>(dir: string, onComplete?: CompleteCallback): void;
+    loadDir<T extends Asset>(dir: string, type: AssetType<T>, onComplete?: CompleteCallback): void;
     loadDir<T extends Asset>(
         bundleName: string,
-        dir?: string | AssetType<T> | ProgressCallback | CompleteCallback | null,
-        type?: AssetType<T> | ProgressCallback | CompleteCallback | null,
-        onProgress?: ProgressCallback | CompleteCallback | null,
-        onComplete?: CompleteCallback | null,
+        dir?: string | AssetType<T> | ProgressCallback | CompleteCallback,
+        type?: AssetType<T> | ProgressCallback | CompleteCallback,
+        onProgress?: ProgressCallback | CompleteCallback,
+        onComplete?: CompleteCallback,
     ) {
         let realDir: string;
         let realBundle: string;
@@ -241,10 +255,10 @@ export class GameComponent extends Component {
         oops.res.loadDir(bundleName, dir, type, onProgress, onComplete);
     }
 
-    /** 释放一个资源 */
+    /** 释放资源 */
     release() {
         if (this.resPaths) {
-            var rps = this.resPaths.get(ResType.Load);
+            const rps = this.resPaths.get(ResType.Load);
             if (rps) {
                 rps.forEach((value: ResRecord) => {
                     oops.res.release(value.path, value.bundle);
@@ -254,10 +268,10 @@ export class GameComponent extends Component {
         }
     }
 
-    /** 释放一个文件夹的资源 */
+    /** 释放文件夹的资源 */
     releaseDir() {
         if (this.resPaths) {
-            var rps = this.resPaths.get(ResType.LoadDir);
+            const rps = this.resPaths.get(ResType.LoadDir);
             if (rps) {
                 rps.forEach((value: ResRecord) => {
                     oops.res.releaseDir(value.path, value.bundle);
@@ -269,13 +283,33 @@ export class GameComponent extends Component {
     /** 释放音效资源 */
     releaseAudioEffect() {
         if (this.resPaths) {
-            var rps = this.resPaths.get(ResType.Audio);
+            const rps = this.resPaths.get(ResType.Audio);
             if (rps) {
                 rps.forEach((value: ResRecord) => {
-                    oops.audio.releaseEffect(value.path, value.bundle);
+                    oops.audio.putEffect(value.resId!, value.path, value.bundle);
                 });
             }
         }
+    }
+
+    /**
+     * 设置图片资源
+     * @param target  目标精灵对象
+     * @param path    图片资源地址
+     * @param bundle  资源包名
+     */
+    async setSprite(target: Sprite, path: string, bundle: string = resLoader.defaultBundleName) {
+        const spriteFrame = await this.loadAsync(bundle, path, SpriteFrame);
+        if (!spriteFrame || !isValid(target)) {
+            const rps = this.resPaths.get(ResType.Load);
+            if (rps) {
+                const key = this.getResKey(bundle, path);
+                rps.delete(key);
+                oops.res.release(path, bundle);
+            }
+            return;
+        }
+        target.spriteFrame = spriteFrame;
     }
     //#endregion
 
@@ -306,16 +340,23 @@ export class GameComponent extends Component {
      * @param callback      资源加载完成回调
      * @param bundleName    资源包名
      */
-    playEffect(url: string, callback?: Function, bundleName?: string) {
+    async playEffect(url: string, bundleName?: string) {
         if (bundleName == null) bundleName = oops.res.defaultBundleName;
-        this.addPathToRecord(ResType.Audio, bundleName, url);
-        oops.audio.playEffect(url, callback, bundleName);
+        const id = await oops.audio.playEffect(url, bundleName, () => {
+            const rps = this.resPaths.get(ResType.Audio);
+            if (rps) {
+                const key = this.getResKey(bundleName, url, id);
+                rps.delete(key);
+            }
+        });
+        this.addPathToRecord(ResType.Audio, bundleName, url, id);
     }
     //#endregion
 
     //#region 游戏逻辑事件
     /** 
      * 批量设置当前界面按钮事件
+     * @param bindRootEvent  是否对预制根节点绑定触摸事件
      * @example
      * 注：按钮节点Label1、Label2必须绑定UIButton等类型的按钮组件才会生效，方法名必须与节点名一致
      * this.setButton();
@@ -323,36 +364,39 @@ export class GameComponent extends Component {
      * Label1(event: EventTouch) { console.log(event.target.name); }
      * Label2(event: EventTouch) { console.log(event.target.name); }
      */
-    protected setButton() {
+    protected setButton(bindRootEvent: boolean = true) {
         // 自定义按钮批量绑定触摸事件
-        this.node.on(Node.EventType.TOUCH_END, (event: EventTouch) => {
-            var self: any = this;
-            var func = self[event.target.name];
-            if (func) {
-                func.call(this, event);
-            }
-            // 不触发界面根节点触摸事件、不触发长按钮组件的触摸事件
-            else if (event.target != this.node && event.target.getComponent(ButtonTouchLong) == null) {
-                console.error(`名为【${event.target.name}】的按钮事件方法不存在`);
-            }
-        }, this);
+        if (bindRootEvent) {
+            this.node.on(Node.EventType.TOUCH_END, (event: EventTouch) => {
+                const self: any = this;
+                const func = self[event.target.name];
+                if (func) {
+                    func.call(this, event);
+                }
+                // 不触发界面根节点触摸事件、不触发长按钮组件的触摸事件
+                // else if (event.target != this.node && event.target.getComponent(ButtonTouchLong) == null) {
+                //     console.warn(`名为【${event.target.name}】的按钮事件方法不存在`);
+                // }
+            }, this);
+        }
 
         // Cocos Creator Button组件批量绑定触摸事件（使用UIButton支持放连点功能）
         const regex = /<([^>]+)>/;
-        var buttons = this.node.getComponentsInChildren<Button>(Button);
+        const buttons = this.node.getComponentsInChildren<Button>(Button);
         buttons.forEach((b: Button) => {
-            var node = b.node;
-            var self: any = this;
-            var func = self[node.name];
+            const node = b.node;
+            const self: any = this;
+            const func = self[node.name];
             if (func) {
-                var event = new EventHandler();
+                const event = new EventHandler();
                 event.target = this.node;
                 event.handler = b.node.name;
                 event.component = this.name.match(regex)![1];
                 b.clickEvents.push(event);
             }
-            else
-                console.error(`名为【${node.name}】的按钮事件方法不存在`);
+            // else {
+            //     console.warn(`名为【${node.name}】的按钮事件方法不存在`);
+            // }
         });
     }
 
@@ -367,9 +411,9 @@ export class GameComponent extends Component {
     protected setEvent(...args: string[]) {
         const self: any = this;
         for (const name of args) {
-            var func = self[name];
+            const func = self[name];
             if (func)
-                this.on(name, self[name], this);
+                this.on(name, func, this);
             else
                 console.error(`名为【${name}】的全局事方法不存在`);
         }

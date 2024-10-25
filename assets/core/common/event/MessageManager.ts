@@ -48,8 +48,8 @@ export class MessageEventData {
 
     /** 
      * 触发全局事件 
-     * @param event(string)      事件名
-     * @param args(any)          事件参数
+     * @param event      事件名
+     * @param args       事件参数
      */
     dispatchEvent(event: string, ...args: any) {
         message.dispatchEvent(event, ...args);
@@ -57,14 +57,16 @@ export class MessageEventData {
 
     /** 清除所有的全局事件监听 */
     clear() {
-        for (let event in this.events) {
-            this.off(event);
+        const keys = Array.from(this.events.keys());
+        for (let event of keys) {
+            this.off(event)
         }
     }
 }
 
 /** 
  * 全局消息管理
+ * @help    https://gitee.com/dgflash/oops-framework/wikis/pages?sort_id=12037894&doc_id=2873565
  * @example 
 // 注册持续监听的全局事件
 export class RoleViewComp extends Component{
@@ -185,8 +187,8 @@ export class MessageManager {
 
     /** 
      * 触发全局事件 
-     * @param event(string)      事件名
-     * @param args(any)          事件参数
+     * @param event      事件名
+     * @param args       事件参数
      */
     dispatchEvent(event: string, ...args: any) {
         let list = this.events.get(event);

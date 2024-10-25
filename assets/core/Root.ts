@@ -4,7 +4,7 @@
  * @LastEditors: dgflash
  * @LastEditTime: 2023-08-28 10:02:57
  */
-import { Component, Game, JsonAsset, Node, _decorator, director, game, screen, sys } from "cc";
+import { _decorator, Component, director, Game, game, JsonAsset, Node, screen, sys } from "cc";
 import { GameConfig } from "../module/config/GameConfig";
 import { GameQueryConfig } from "../module/config/GameQueryConfig";
 import { oops, version } from "./Oops";
@@ -13,14 +13,14 @@ import { EventMessage } from "./common/event/EventMessage";
 import { message } from "./common/event/MessageManager";
 import { resLoader } from "./common/loader/ResLoader";
 import { StorageManager } from "./common/storage/StorageManager";
+import { StorageSecuritySimple } from "./common/storage/StorageSecuritySimple";
 import { TimerManager } from "./common/timer/TimerManager";
 import { GameManager } from "./game/GameManager";
-import { GUI } from "./gui/GUI";
 import { LayerManager } from "./gui/layer/LayerManager";
 
 const { property } = _decorator;
 
-var isInited = false;
+let isInited = false;
 
 /** 框架显示层根节点 */
 export class Root extends Component {
@@ -47,7 +47,8 @@ export class Root extends Component {
 
             console.log(`Oops Framework v${version}`);
             this.enabled = false;
-            this.loadConfig();
+            this.iniStart();
+            this.loadConfig().then();
         }
     }
 
@@ -66,9 +67,14 @@ export class Root extends Component {
             oops.config.query = new GameQueryConfig();
             oops.config.game = new GameConfig(config);
 
+            // 设置默认资源包
+            oops.res.defaultBundleName = oops.config.game.bundleDefault;
+            oops.res.init(oops.config.game.data.bundle);
+
             // 本地存储模块
             oops.storage = new StorageManager();
-            oops.storage.init(oops.config.game.localDataKey, oops.config.game.localDataIv);      // 初始化本地存储加密
+            oops.storage.init(new StorageSecuritySimple);
+            // oops.storage.init(new StorageSecurityCrypto);
 
             // 全局消息
             oops.message = message;
@@ -99,12 +105,17 @@ export class Root extends Component {
             oops.res.release(config_name);
         }
         else {
-            this.loadConfig();
+            this.loadConfig().then();
         }
     }
 
     update(dt: number) {
         oops.ecs.execute(dt);
+    }
+
+    /** 初始化开始 */
+    protected iniStart() {
+
     }
 
     /** 初始化游戏界面 */
@@ -122,7 +133,7 @@ export class Root extends Component {
 
     }
 
-    protected init() {
+    private init() {
         this.initGui();
         this.initEcsSystem();
         oops.ecs.init();
@@ -132,11 +143,8 @@ export class Root extends Component {
         // 游戏隐藏事件
         game.on(Game.EVENT_HIDE, this.onHide, this);
 
-        // 添加游戏界面屏幕自适应管理组件
-        this.gui.addComponent(GUI)!;
-
         // 游戏尺寸修改事件
-        if (sys.isMobile == false) {
+        if (!sys.isMobile) {
             screen.on("window-resize", () => {
                 oops.message.dispatchEvent(EventMessage.GAME_RESIZE);
             }, this);

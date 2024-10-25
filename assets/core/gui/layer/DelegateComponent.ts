@@ -10,6 +10,10 @@ import { ViewParams } from "./Defines";
 
 const { ccclass } = _decorator;
 
+const EventOnAdded: string = "onAdded";
+const EventOnBeforeRemove: string = "onBeforeRemove";
+const EventOnRemoved: string = "onRemoved";
+
 /** 窗口事件触发组件 */
 @ccclass('DelegateComponent')
 export class DelegateComponent extends Component {
@@ -19,19 +23,34 @@ export class DelegateComponent extends Component {
     onCloseWindow: Function = null!;
 
     /** 窗口添加 */
-    add() {
-        // 触发窗口组件上添加到父节点后的事件
-        this.applyComponentsFunction(this.node, "onAdded", this.vp.params);
-        if (typeof this.vp.callbacks.onAdded === "function") {
-            this.vp.callbacks.onAdded(this.node, this.vp.params);
-        }
+    add(): Promise<boolean> {
+        return new Promise(async (resolve, reject) => {
+            // 触发窗口组件上添加到父节点后的事件
+            for (let i = 0; i < this.node.components.length; i++) {
+                const component: any = this.node.components[i];
+                const func = component[EventOnAdded];
+                if (func) {
+                    if (await func.call(component, this.vp.params) == false) {
+                        resolve(false);
+                        return;
+                    }
+                }
+            }
+
+            // 触发外部窗口显示前的事件（辅助实现自定义动画逻辑）
+            if (typeof this.vp.callbacks.onAdded === "function") {
+                this.vp.callbacks.onAdded(this.node, this.vp.params);
+            }
+
+            resolve(true);
+        });
     }
 
     /** 删除节点，该方法只能调用一次，将会触发onBeforeRemoved回调 */
     remove(isDestroy?: boolean) {
         if (this.vp.valid) {
             // 触发窗口移除舞台之前事件
-            this.applyComponentsFunction(this.node, "onBeforeRemove", this.vp.params);
+            this.applyComponentsFunction(this.node, EventOnBeforeRemove, this.vp.params);
 
             //  通知外部对象窗口组件上移除之前的事件（关闭窗口前的关闭动画处理）
             if (typeof this.vp.callbacks.onBeforeRemove === "function") {
@@ -77,14 +96,14 @@ export class DelegateComponent extends Component {
 
     onDestroy() {
         // 触发窗口组件上窗口移除之后的事件
-        this.applyComponentsFunction(this.node, "onRemoved", this.vp.params);
+        this.applyComponentsFunction(this.node, EventOnRemoved, this.vp.params);
         this.vp = null!;
     }
 
     protected applyComponentsFunction(node: Node, funName: string, params: any) {
         for (let i = 0; i < node.components.length; i++) {
-            let component: any = node.components[i];
-            let func = component[funName];
+            const component: any = node.components[i];
+            const func = component[funName];
             if (func) {
                 func.call(component, params);
             }
