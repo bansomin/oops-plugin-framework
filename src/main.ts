@@ -1,11 +1,13 @@
 import { shell } from "electron";
+import { checkUpdate, statistics } from "./common/version";
 
 /**
  * @en Hooks triggered after extension loading is complete
  * @zh 扩展加载完成后触发的钩子
  */
 export function load() {
-    
+    checkUpdate();
+    statistics();
 }
 
 /**
@@ -33,6 +35,9 @@ export const methods: { [key: string]: (...any: any) => any } = {
     log() {
         shell.openExternal('https://gitee.com/dgflash/oops-framework/wikis/pages?sort_id=12101082&doc_id=2873565');
     },
+    update() {
+        checkUpdate();
+    },
     /** 打开解决方案列表 */
     solution() {
         shell.openExternal('https://store.cocos.com/app/search?name=oops');
@@ -48,5 +53,8 @@ export const methods: { [key: string]: (...any: any) => any } = {
     /** 点亮 Github 星星 */
     github() {
         shell.openExternal('https://github.com/dgflash/oops-framework');
+    },
+    animator_editor() {
+        shell.openExternal('https://oops-1255342636.cos.ap-shanghai.myqcloud.com/tools/animator-editor/index.html');
     }
 };

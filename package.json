@@ -1,11 +1,13 @@
 {
     "package_version": 2,
-    "version": "1.0.0",
+    "version": "2.0.0.20241118",
     "name": "oops-framework",
     "description": "i18n:oops-framework.description",
     "main": "./dist/main.js",
     "author": "dgflash",
     "editor": ">=3.4.2",
+    "repository": "https://gitee.com/dgflash/oops-plugin-framework",
+    "license": "MIT",
     "scripts": {
         "build": "tsc -b",
         "watch": "tsc -w",
@@ -49,6 +51,11 @@
         },
         "menu": [
             {
+                "path": "i18n:oops-framework.name/i18n:oops-framework.tools",
+                "label": "i18n:oops-framework.tools_animator_editor",
+                "message": "animator_editor"
+            },
+            {
                 "path": "i18n:oops-framework.name",
                 "label": "i18n:oops-framework.document_oops",
                 "message": "document"
@@ -86,6 +93,11 @@
                 "path": "i18n:oops-framework.name",
                 "label": "i18n:oops-framework.log",
                 "message": "log"
+            },
+            {
+                "path": "i18n:oops-framework.name",
+                "label": "i18n:oops-framework.update",
+                "message": "update"
             }
         ],
         "messages": {
@@ -102,6 +114,11 @@
             "log": {
                 "methods": [
                     "log"
+                ]
+            },
+            "update": {
+                "methods": [
+                    "update"
                 ]
             },
             "tutorial": {
@@ -123,11 +140,18 @@
                 "methods": [
                     "github"
                 ]
+            },
+            "animator_editor": {
+                "methods": [
+                    "animator_editor"
+                ]
             }
         }
     },
     "dependencies": {
+        "axios": "^1.7.7",
         "fs-extra": "^10.0.0",
+        "systeminformation": "^5.23.5",
         "vue": "^3.1.4"
     },
     "devDependencies": {

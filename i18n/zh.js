@@ -10,6 +10,7 @@ module.exports = {
     gitee: "点亮 Gitee 星星",
     github: "点亮 Github 星星",
     log: "更新日志",
+    update: "检查更新",
     script: "脚本",
     createGameComponent: "创建显示对象模板",
     createModule: "创建 ECS 模块",
@@ -17,7 +18,9 @@ module.exports = {
     createBll: "创建 ECS 业务层脚本",
     createView: "创建 ECS 视图层脚本",
     createViewMvvm: "创建 ECS 视图层脚本 - MVVM",
-    tools: "工具",
+    tools: "框架工具",
+    tools_asset_menu: "工具",
     tools_compress: "图片压缩",
+    tools_animator_editor: "动画状态机编辑器",
     panel_create_file: "创建框架模板"
 };

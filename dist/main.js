@@ -2,11 +2,15 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.methods = exports.config = exports.unload = exports.load = void 0;
 const electron_1 = require("electron");
+const version_1 = require("./common/version");
 /**
  * @en Hooks triggered after extension loading is complete
  * @zh 扩展加载完成后触发的钩子
  */
-function load() { }
+function load() {
+    (0, version_1.checkUpdate)();
+    (0, version_1.statistics)();
+}
 exports.load = load;
 /**
  * @en Hooks triggered after extension uninstallation is complete
@@ -31,6 +35,9 @@ exports.methods = {
     log() {
         electron_1.shell.openExternal('https://gitee.com/dgflash/oops-framework/wikis/pages?sort_id=12101082&doc_id=2873565');
     },
+    update() {
+        (0, version_1.checkUpdate)();
+    },
     /** 打开解决方案列表 */
     solution() {
         electron_1.shell.openExternal('https://store.cocos.com/app/search?name=oops');
@@ -46,5 +53,8 @@ exports.methods = {
     /** 点亮 Github 星星 */
     github() {
         electron_1.shell.openExternal('https://github.com/dgflash/oops-framework');
+    },
+    animator_editor() {
+        electron_1.shell.openExternal('https://oops-1255342636.cos.ap-shanghai.myqcloud.com/tools/animator-editor/index.html');
     }
 };

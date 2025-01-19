@@ -1,4 +1,4 @@
-import { Camera, Layers, Node, ResolutionPolicy, Widget, screen, view, warn } from "cc";
+import { Camera, Layers, Node, ResolutionPolicy, SafeArea, Widget, screen, view, warn } from "cc";
 import { oops } from "../../Oops";
 import { UICallbacks } from "./Defines";
 import { DelegateComponent } from "./DelegateComponent";
@@ -69,6 +69,8 @@ export interface UIConfig {
     vacancy?: boolean,
     /** 是否打开窗口后显示背景遮罩（默认关闭） */
     mask?: boolean;
+    /** 是否启动真机安全区域显示 */
+    safeArea?: boolean;
 }
 
 /** 界面层级管理器 */
@@ -82,46 +84,31 @@ export class LayerManager {
     /** 新手引导层 */
     guide!: Node;
 
+    /** 窗口宽高比例 */
+    windowAspectRatio: number = 0;
+    /** 设计宽高比例 */
+    designAspectRatio: number = 0;
+    /** 是否开启移动设备安全区域适配 */
+    mobileSafeArea: boolean = false;
+
     /** 界面层 */
-    private readonly ui!: LayerUI;
+    private ui!: LayerUI;
     /** 弹窗层 */
-    private readonly popup!: LayerPopUp;
+    private popup!: LayerPopUp;
     /** 只能弹出一个的弹窗 */
-    private readonly dialog!: LayerDialog;
+    private dialog!: LayerDialog;
     /** 游戏系统提示弹窗  */
-    private readonly system!: LayerDialog;
+    private system!: LayerDialog;
     /** 消息提示控制器，请使用show方法来显示 */
-    private readonly notify!: LayerNotify;
+    private notify!: LayerNotify;
     /** UI配置 */
     private configs: { [key: number]: UIConfig } = {};
 
-    private initScreenAdapter() {
-        const drs = view.getDesignResolutionSize();
-        const ws = screen.windowSize;
-        const windowAspectRatio = ws.width / ws.height;
-        const designAspectRatio = drs.width / drs.height;
-
-        let finalW: number = 0;
-        let finalH: number = 0;
-
-        if (windowAspectRatio > designAspectRatio) {
-            finalH = drs.height;
-            finalW = finalH * ws.width / ws.height;
-            oops.log.logView("适配屏幕高度", "【横屏】");
-        }
-        else {
-            finalW = drs.width;
-            finalH = finalW * ws.height / ws.width;
-            oops.log.logView("适配屏幕宽度", "【竖屏】");
-        }
-        view.setDesignResolutionSize(finalW, finalH, ResolutionPolicy.UNKNOWN);
-    }
-
     /**
-     * 构造函数
+     * 初始化界面层
      * @param root  界面根节点
      */
-    constructor(root: Node) {
+    private initLayer(root: Node) {
         this.root = root;
         this.initScreenAdapter();
         this.camera = this.root.getComponentInChildren(Camera)!;
@@ -141,6 +128,34 @@ export class LayerManager {
         root.addChild(this.system);
         root.addChild(this.notify);
         root.addChild(this.guide);
+    }
+
+    /** 初始化屏幕适配 */
+    private initScreenAdapter() {
+        const drs = view.getDesignResolutionSize();
+        const ws = screen.windowSize;
+        this.windowAspectRatio = ws.width / ws.height;
+        this.designAspectRatio = drs.width / drs.height;
+
+        let finalW: number = 0;
+        let finalH: number = 0;
+
+        if (this.windowAspectRatio > this.designAspectRatio) {
+            finalH = drs.height;
+            finalW = finalH * ws.width / ws.height;
+            oops.log.logView("适配屏幕高度", "【横屏】");
+        }
+        else {
+            finalW = drs.width;
+            finalH = finalW * ws.height / ws.width;
+            oops.log.logView("适配屏幕宽度", "【竖屏】");
+        }
+        view.setDesignResolutionSize(finalW, finalH, ResolutionPolicy.UNKNOWN);
+
+        if (this.mobileSafeArea) {
+            this.root.addComponent(SafeArea);
+            oops.log.logView("开启移动设备安全区域适配");
+        }
     }
 
     /**
